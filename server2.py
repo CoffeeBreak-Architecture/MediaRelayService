@@ -18,9 +18,9 @@ class Peer:
     def __init__(self, pc):
         self.pc = pc
         self.tracks = {}
+        self.relay = MediaRelay()
 
 ROOT = os.path.dirname(__file__)
-relay = MediaRelay()
 clients = {}
 listeners = set()
 listenerTracks = set()
@@ -33,8 +33,8 @@ async def listener_sdp(request):
     print(params)
     pc = RTCPeerConnection()
     print('Number of listeners: ', len(listeners))
-    pc.addTrack(relay.subscribe(clients[username].tracks['audio']))
-    pc.addTrack(relay.subscribe(clients[username].tracks['video']))
+    pc.addTrack(clients[username].relay.subscribe(clients[username].tracks['audio']))
+    pc.addTrack(clients[username].relay.subscribe(clients[username].tracks['video']))
     await pc.setRemoteDescription(offer)
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
@@ -67,10 +67,8 @@ async def client_sdp(request):
         print(x)
     @clients[username].pc.on('track')
     async def on_track(track):
-        global globaltrack
-        globaltrack = track;
-        recorder.addTrack(globaltrack)
         clients[username].tracks[track.kind] = track
+        recorder.addTrack(clients[username].relay.subscribe(track))
     @clients[username].pc.on("connectionstatechange")
     async def on_connectionstatechange():
         print("Connection state is %s", pc.connectionState)
