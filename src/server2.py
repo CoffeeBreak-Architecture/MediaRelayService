@@ -1,18 +1,15 @@
-import argparse
 import asyncio
 import json
-import logging
 import os
-import ssl
+
 
 from aiohttp import web
 import aiohttp_cors
 from av import VideoFrame
 
-from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
+from aiortc import RTCPeerConnection, RTCSessionDescription,
 from aiortc.mediastreams import MediaStreamError
-from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder, MediaRelay
-
+from aiortc.contrib.media import MediaBlackhole, MediaRelay
 class Peer:
     def __init__(self, pc):
         self.pc = pc
@@ -22,22 +19,22 @@ class Peer:
 ROOT = os.path.dirname(__file__)
 clients = {}
 listeners = set()
-listenerTracks = set()
 globaltrack = None;
 
-async def listener_sdp(request):
+async def listener_connection(request):
     params = await request.json()
     username = params['name']
     offer = RTCSessionDescription(sdp=params['sdp'], type='offer')
-    print(params)
     pc = RTCPeerConnection()
     print('Number of listeners: ', len(listeners))
+    #Adds the requested clients tracks subscribed to the MediaRelay
     pc.addTrack(clients[username].relay.subscribe(clients[username].tracks['audio']))
     pc.addTrack(clients[username].relay.subscribe(clients[username].tracks['video']))
     await pc.setRemoteDescription(offer)
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
     listeners.add(pc)
+    #Handles removal of dead connections
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
         print("Connection state is %s", pc.connectionState)
@@ -53,22 +50,23 @@ async def listener_sdp(request):
         })
     )
 
-async def client_sdp(request):
+async def client_connection(request):
     params = await request.json()
     offer = RTCSessionDescription(sdp=params['sdp'], type='offer')
     recorder = MediaBlackhole()
     pc = RTCPeerConnection()
     username = params['name']
     print(username)
+    #Inits a clients dict entry
     clients[username] = Peer(pc)
     print('Number of clients: ', len(clients))
-    for x in clients:
-        print(x)
+    #Remote track event. If fired
     @clients[username].pc.on('track')
     async def on_track(track):
         clients[username].tracks[track.kind] = track
         recorder.addTrack(clients[username].relay.subscribe(track))
     @clients[username].pc.on("connectionstatechange")
+    #Handles removal of dead connections
     async def on_connectionstatechange():
         print("Connection state is %s", pc.connectionState)
         if clients[username].pc.connectionState == ("failed") or clients[username].pc.connectionState == ("closed"):
@@ -77,6 +75,7 @@ async def client_sdp(request):
     await clients[username].pc.setRemoteDescription(offer)
     answer = await clients[username].pc.createAnswer()
     await clients[username].pc.setLocalDescription(answer)
+    #Starts media playing in order to stream to listeners
     await recorder.start();
     return web.Response(
         content_type='application/json',
@@ -85,15 +84,6 @@ async def client_sdp(request):
             'type': 'answer'
         })
     )
-
-async def index(request):
-    content = open(os.path.join(ROOT, "index.html"), "r").read()
-    return web.Response(content_type="text/html", text=content)
-
-
-async def javascript(request):
-    content = open(os.path.join(ROOT, "client.js"), "r").read()
-    return web.Response(content_type="application/javascript", text=content)
 
 async def close_connection(request):
     params = await request.json()
@@ -111,11 +101,11 @@ async def on_shutdown(app):
 if __name__ == '__main__':
     app = web.Application()
     app.on_shutdown.append(on_shutdown)
-    app.router.add_get("/", index)
-    app.router.add_post('/offer', client_sdp)
-    app.router.add_post('/listener', listener_sdp)
+    #Exposes paths for function API calls
+    app.router.add_post('/offer', client_connection)
+    app.router.add_post('/listener', listener_connection)
     app.router.add_post('/shutdown', close_connection)
-    app.router.add_get("/client.js", javascript)
+    
     cors = aiohttp_cors.setup(app, defaults={
         "*": aiohttp_cors.ResourceOptions(
                 allow_credentials=True,
