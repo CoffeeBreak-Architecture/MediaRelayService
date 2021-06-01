@@ -7,7 +7,7 @@ from aiohttp import web
 import aiohttp_cors
 from av import VideoFrame
 
-from aiortc import RTCPeerConnection, RTCSessionDescription,
+from aiortc import RTCPeerConnection, RTCSessionDescription
 from aiortc.mediastreams import MediaStreamError
 from aiortc.contrib.media import MediaBlackhole, MediaRelay
 class Peer:
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     app.router.add_post('/offer', client_connection)
     app.router.add_post('/listener', listener_connection)
     app.router.add_post('/shutdown', close_connection)
-    
+
     cors = aiohttp_cors.setup(app, defaults={
         "*": aiohttp_cors.ResourceOptions(
                 allow_credentials=True,
