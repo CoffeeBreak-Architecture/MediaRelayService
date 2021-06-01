@@ -5,7 +5,6 @@ import logging
 import os
 import ssl
 
-import cv2
 from aiohttp import web
 import aiohttp_cors
 from av import VideoFrame
